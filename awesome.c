@@ -36,6 +36,8 @@
 #include "systray.h"
 #include "xwindow.h"
 
+#include "reapsub.h"
+
 #include <getopt.h>
 
 #include <locale.h>
@@ -281,11 +283,12 @@ exit_help(int exit_code)
 {
     FILE *outfile = (exit_code == EXIT_SUCCESS) ? stdout : stderr;
     fprintf(outfile,
-"Usage: awesome [OPTION]\n\
-  -h, --help             show help\n\
-  -v, --version          show version\n\
-  -c, --config FILE      configuration file to use\n\
-  -k, --check            check configuration file syntax\n");
+"Usage: awesome [OPTION]\n"
+"  -h, --help             show help\n"
+"  -v, --version          show version\n"
+"  -c, --config FILE      configuration file to use\n"
+"  -k, --check            check configuration file syntax\n"
+"  -r, --no-reapsub       Not reaping subprocess\n");
     exit(exit_code);
 }
 
@@ -303,15 +306,17 @@ main(int argc, char **argv)
     xdgHandle xdg;
     bool no_argb = false;
     bool run_test = false;
+    bool reap_sub = true;
     xcb_query_tree_cookie_t tree_c;
     static struct option long_options[] =
     {
-        { "help",    0, NULL, 'h' },
-        { "version", 0, NULL, 'v' },
-        { "config",  1, NULL, 'c' },
-        { "check",   0, NULL, 'k' },
-        { "no-argb", 0, NULL, 'a' },
-        { NULL,      0, NULL, 0 }
+        { "help",       0, NULL, 'h' },
+        { "version",    0, NULL, 'v' },
+        { "config",     1, NULL, 'c' },
+        { "check",      0, NULL, 'k' },
+        { "no-argb",    0, NULL, 'a' },
+        { "no-reapsub", 0, NULL, 'r' },
+        { NULL,         0, NULL, 0 },
     };
 
     /* clear the globalconf structure */
@@ -365,6 +370,9 @@ main(int argc, char **argv)
           case 'a':
             no_argb = true;
             break;
+          case 'r':
+            reap_sub = false;
+            break;
         }
 
     if (run_test)
@@ -393,6 +401,11 @@ main(int argc, char **argv)
     sigaction(SIGFPE, &sa, 0);
     sigaction(SIGILL, &sa, 0);
     sigaction(SIGSEGV, &sa, 0);
+
+    /* do we need to reap all subprocess */
+#ifdef PR_SET_CHILD_SUBREAPER
+    if (reap_sub) set_reap_subprocess();
+#endif
 
     /* We have no clue where the input focus is right now */
     globalconf.focus.need_update = true;
