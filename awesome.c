@@ -56,6 +56,24 @@
 
 #include <glib-unix.h>
 
+#include "awesome.h"
+#include "spawn.h"
+#include "objects/client.h"
+#include "xwindow.h"
+#include "ewmh.h"
+#include "dbus.h"
+#include "systray.h"
+#include "event.h"
+#include "property.h"
+//#include "screen.h"
+#include "luaa.h"
+#include "common/version.h"
+#include "common/atoms.h"
+#include "common/xcursor.h"
+#include "common/xutil.h"
+#include "common/backtrace.h"
+#include "reapsub.h"
+
 awesome_t globalconf;
 
 /** argv used to run awesome */
