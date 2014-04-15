@@ -304,7 +304,7 @@ exit_help(int exit_code)
 "  -v, --version          show version\n"
 "  -c, --config FILE      configuration file to use\n"
 "  -k, --check            check configuration file syntax\n"
-"  -r, --no-reapsub       Not reaping subprocess\n");
+"  -r, --no-reapsub       Not reaping subprocess (Kernel 3.4+)\n");
     exit(exit_code);
 }
 
@@ -421,6 +421,7 @@ main(int argc, char **argv)
     sigaction(SIGSEGV, &sa, 0);
 
     /* do we need to reap all subprocess */
+    if (check_kernel_above_3_4()) reap_sub = false;
 #ifdef PR_SET_CHILD_SUBREAPER
     if (reap_sub) set_reap_subprocess();
 #endif
