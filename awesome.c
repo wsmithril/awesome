@@ -63,7 +63,7 @@
 #include "systray.h"
 #include "event.h"
 #include "property.h"
-#include "screen.h"
+//#include "screen.h"
 #include "luaa.h"
 #include "common/version.h"
 #include "common/atoms.h"
@@ -323,7 +323,6 @@ main(int argc, char **argv)
     bool no_argb = false;
     bool run_test = false;
     bool reap_sub = true;
-    xcb_generic_event_t *event;
 
     xcb_query_tree_cookie_t tree_c;
     static struct option long_options[] =
