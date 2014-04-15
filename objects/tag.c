@@ -20,6 +20,7 @@
  */
 
 #include "tag.h"
+#include "banning.h"
 #include "client.h"
 #include "ewmh.h"
 #include "luaa.h"
@@ -159,23 +160,6 @@ tags_get_first_selected_index(void)
         if((*tag)->selected)
             return tag_array_indexof(&globalconf.tags, tag);
     return 0;
-}
-
-/** View only a tag, selected by its index.
- * \param dindex The index.
- */
-void
-tag_view_only_byindex(int dindex)
-{
-    if(dindex < 0 || dindex >= globalconf.tags.len)
-        return;
-
-    foreach(tag, globalconf.tags)
-    {
-        luaA_object_push(globalconf.L, *tag);
-        tag_view(globalconf.L, -1, *tag == globalconf.tags.tab[dindex]);
-        lua_pop(globalconf.L, 1);
-    }
 }
 
 /** Create a new tag.
@@ -365,6 +349,7 @@ tag_class_setup(lua_State *L)
     signal_add(&tag_class.signals, "property::name");
     signal_add(&tag_class.signals, "property::selected");
     signal_add(&tag_class.signals, "property::activated");
+    signal_add(&tag_class.signals, "request::select");
     signal_add(&tag_class.signals, "tagged");
     signal_add(&tag_class.signals, "untagged");
 }

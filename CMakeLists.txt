@@ -30,7 +30,7 @@ set(AWE_THEMES_DIR ${SOURCE_DIR}/themes)
 set(AWE_DOC_FILES
     ${SOURCE_DIR}/AUTHORS
     ${SOURCE_DIR}/BUGS
-    ${SOURCE_DIR}/README
+    ${SOURCE_DIR}/README.md
     ${SOURCE_DIR}/LICENSE)
 
 set(AWE_SRCS
@@ -49,7 +49,6 @@ set(AWE_SRCS
     ${SOURCE_DIR}/property.c
     ${SOURCE_DIR}/reapsub.c
     ${SOURCE_DIR}/root.c
-    ${SOURCE_DIR}/screen.c
     ${SOURCE_DIR}/selection.c
     ${SOURCE_DIR}/spawn.c
     ${SOURCE_DIR}/stack.c
@@ -72,6 +71,7 @@ set(AWE_SRCS
     ${SOURCE_DIR}/objects/drawable.c
     ${SOURCE_DIR}/objects/drawin.c
     ${SOURCE_DIR}/objects/key.c
+    ${SOURCE_DIR}/objects/screen.c
     ${SOURCE_DIR}/objects/tag.c
     ${SOURCE_DIR}/objects/timer.c
     ${SOURCE_DIR}/objects/window.c)

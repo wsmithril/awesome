@@ -19,14 +19,13 @@
  *
  */
 
-#include <unistd.h>
-
-#include "globalconf.h"
-#include "mouse.h"
 #include "mousegrabber.h"
-#include "luaa.h"
 #include "common/xcursor.h"
-#include "common/xutil.h"
+#include "mouse.h"
+#include "globalconf.h"
+
+#include <unistd.h>
+#include <stdbool.h>
 
 /** Grab the mouse.
  * \param cursor The cursor to use while grabbing.
@@ -140,6 +139,8 @@ const struct luaL_Reg awesome_mousegrabber_lib[] =
     { "run", luaA_mousegrabber_run },
     { "stop", luaA_mousegrabber_stop },
     { "isrunning", luaA_mousegrabber_isrunning },
+    { "__index", luaA_default_index },
+    { "__newindex", luaA_default_newindex },
     { NULL, NULL }
 };
 

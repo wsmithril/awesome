@@ -4,13 +4,11 @@
 module("awesome")
 
 --- awesome global table.
--- @field font The default font.
--- @field font_height The default font height.
--- @field fg The default foreground color.
--- @field bg The default background color.
 -- @field version The version of awesome.
 -- @field release The release name of awesome.
 -- @field conffile The configuration file which has been loaded.
+-- @field startup True if we are still in startup, false otherwise.
+-- @field startup_errors Error message for errors that occured during startup.
 -- @field composite_manager_running True if a composite manager is running.
 -- @class table
 -- @name awesome
@@ -38,6 +36,23 @@ module("awesome")
 -- @param name The file name
 -- @return A cairo image surface as light user datum
 -- @name load_image
+-- @class function
+
+--- Register a new xproperty.
+-- @param name The name of the X11 property
+-- @param type One of "string", "number" or "boolean"
+-- @name register_xproperty
+-- @class function
+
+--- Change a xproperty.
+-- @param name The name of the X11 property
+-- @param value The new value for the property
+-- @name set_xproperty
+-- @class function
+
+--- Get the value of a xproperty.
+-- @param name The name of the X11 property
+-- @name get_xproperty
 -- @class function
 
 --- Add a global signal.

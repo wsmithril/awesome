@@ -22,13 +22,8 @@
 #ifndef AWESOME_OBJECTS_CLIENT_H
 #define AWESOME_OBJECTS_CLIENT_H
 
-#include "mouse.h"
 #include "stack.h"
-#include "draw.h"
-#include "banning.h"
 #include "objects/window.h"
-#include "objects/drawable.h"
-#include "common/luaobject.h"
 
 #define CLIENT_SELECT_INPUT_EVENT_MASK (XCB_EVENT_MASK_STRUCTURE_NOTIFY \
                                         | XCB_EVENT_MASK_PROPERTY_CHANGE \
@@ -64,6 +59,8 @@ struct client_t
     char *class, *instance;
     /** Window geometry */
     area_t geometry;
+    /** Startup ID */
+    char *startup_id;
     /** True if the client is sticky */
     bool sticky;
     /** Has urgency hint */
@@ -106,6 +103,9 @@ struct client_t
     cairo_surface_t *icon;
     /** Size hints */
     xcb_size_hints_t size_hints;
+    /** The visualtype that c->window uses */
+    xcb_visualtype_t *visualtype;
+    /** Do we honor the client's size hints? */
     bool size_hints_honor;
     /** Machine the client is running on. */
     char *machine;
@@ -119,16 +119,9 @@ struct client_t
     struct {
         /** The size of this bar. */
         uint16_t size;
-        /** The pixmap for double buffering. */
-        xcb_pixmap_t pixmap;
         /** The drawable for this bar. */
         drawable_t *drawable;
     } titlebar[CLIENT_TITLEBAR_COUNT];
-    /** The blob! */
-    struct {
-        char *data;
-        size_t length;
-    } blob;
 };
 
 ARRAY_FUNCS(client_t *, client, DO_NOTHING)
@@ -145,7 +138,7 @@ client_t * client_getbyframewin(xcb_window_t);
 void client_ban(client_t *);
 void client_ban_unfocus(client_t *);
 void client_unban(client_t *);
-void client_manage(xcb_window_t, xcb_get_geometry_reply_t *, bool);
+void client_manage(xcb_window_t, xcb_get_geometry_reply_t *, xcb_get_window_attributes_reply_t *);
 bool client_resize(client_t *, area_t, bool);
 void client_unmanage(client_t *, bool);
 void client_kill(client_t *);
@@ -155,6 +148,7 @@ void client_set_below(lua_State *, int, bool);
 void client_set_modal(lua_State *, int, bool);
 void client_set_ontop(lua_State *, int, bool);
 void client_set_fullscreen(lua_State *, int, bool);
+void client_set_maximized(lua_State *, int, bool);
 void client_set_maximized_horizontal(lua_State *, int, bool);
 void client_set_maximized_vertical(lua_State *, int, bool);
 void client_set_minimized(lua_State *, int, bool);
@@ -174,11 +168,10 @@ void client_set_icon(client_t *c, cairo_surface_t *s);
 void client_set_skip_taskbar(lua_State *, int, bool);
 void client_focus(client_t *);
 void client_focus_update(client_t *);
-void client_focus_refresh(void);
 bool client_hasproto(client_t *, xcb_atom_t);
 void client_ignore_enterleave_events(void);
 void client_restore_enterleave_events(void);
-void client_refresh(client_t *);
+void client_refresh_partial(client_t *, int16_t, int16_t, uint16_t, uint16_t);
 void client_class_setup(lua_State *);
 void client_send_configure(client_t *);
 drawable_t *client_get_drawable(client_t *, int, int);

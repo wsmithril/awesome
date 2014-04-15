@@ -19,15 +19,34 @@
  *
  */
 
+#include "awesome.h"
+
+#include "banning.h"
+#include "common/atoms.h"
+#include "common/backtrace.h"
+#include "common/version.h"
+#include "common/xutil.h"
+#include "dbus.h"
+#include "event.h"
+#include "ewmh.h"
+#include "globalconf.h"
+#include "objects/client.h"
+#include "objects/screen.h"
+#include "spawn.h"
+#include "systray.h"
+#include "xwindow.h"
+
 #include <getopt.h>
 
 #include <locale.h>
 #include <stdio.h>
 #include <unistd.h>
 #include <signal.h>
+#include <sys/time.h>
 
 #include <xcb/bigreq.h>
 #include <xcb/randr.h>
+#include <xcb/xcb_aux.h>
 #include <xcb/xcb_event.h>
 #include <xcb/xinerama.h>
 #include <xcb/xtest.h>
@@ -57,6 +76,12 @@ awesome_t globalconf;
 
 /** argv used to run awesome */
 static char *awesome_argv;
+
+/** time of last main loop wakeup */
+static struct timeval last_wakeup;
+
+/** current limit for the main loop's runtime */
+static float main_loop_iteration_limit = 0.1;
 
 /** Call before exiting.
  */
@@ -114,6 +139,7 @@ scan(xcb_query_tree_cookie_t tree_c)
     tree_c_len = xcb_query_tree_children_length(tree_r);
     xcb_get_window_attributes_cookie_t attr_wins[tree_c_len];
     xcb_get_property_cookie_t state_wins[tree_c_len];
+    xcb_get_geometry_cookie_t geom_wins[tree_c_len];
 
     for(i = 0; i < tree_c_len; i++)
     {
@@ -121,15 +147,15 @@ scan(xcb_query_tree_cookie_t tree_c)
                                                            wins[i]);
 
         state_wins[i] = xwindow_get_state_unchecked(wins[i]);
+        geom_wins[i] = xcb_get_geometry_unchecked(globalconf.connection, wins[i]);
     }
-
-    xcb_get_geometry_cookie_t *geom_wins[tree_c_len];
 
     for(i = 0; i < tree_c_len; i++)
     {
         attr_r = xcb_get_window_attributes_reply(globalconf.connection,
                                                  attr_wins[i],
                                                  NULL);
+        geom_r = xcb_get_geometry_reply(globalconf.connection, geom_wins[i], NULL);
 
         state = xwindow_get_state_reply(state_wins[i]);
 
@@ -137,26 +163,14 @@ scan(xcb_query_tree_cookie_t tree_c)
            || attr_r->map_state == XCB_MAP_STATE_UNMAPPED
            || state == XCB_ICCCM_WM_STATE_WITHDRAWN)
         {
-            geom_wins[i] = NULL;
             p_delete(&attr_r);
+            p_delete(&geom_r);
             continue;
         }
 
+        client_manage(wins[i], geom_r, attr_r);
+
         p_delete(&attr_r);
-
-        /* Get the geometry of the current window */
-        geom_wins[i] = p_alloca(xcb_get_geometry_cookie_t, 1);
-        *(geom_wins[i]) = xcb_get_geometry_unchecked(globalconf.connection, wins[i]);
-    }
-
-    for(i = 0; i < tree_c_len; i++)
-    {
-        if(!geom_wins[i] || !(geom_r = xcb_get_geometry_reply(globalconf.connection,
-                                                              *(geom_wins[i]), NULL)))
-            continue;
-
-        client_manage(wins[i], geom_r, true);
-
         p_delete(&geom_r);
     }
 
@@ -218,9 +232,27 @@ static gint
 a_glib_poll(GPollFD *ufds, guint nfsd, gint timeout)
 {
     guint res;
+    struct timeval now, length_time;
+    float length;
+
+    /* Do all deferred work now */
     awesome_refresh();
+
+    /* Check how long this main loop iteration took */
+    gettimeofday(&now, NULL);
+    timersub(&now, &last_wakeup, &length_time);
+    length = length_time.tv_sec + length_time.tv_usec * 1.0f / 1e6;
+    if (length > main_loop_iteration_limit) {
+        warn("Last main loop iteration took %.6f seconds! Increasing limit for "
+                "this warning to that value.", length);
+        main_loop_iteration_limit = length;
+    }
+
+    /* Actually do the polling, record time of wakeup and check for new xcb events */
     res = g_poll(ufds, nfsd, timeout);
+    gettimeofday(&last_wakeup, NULL);
     a_xcb_check();
+
     return res;
 }
 
@@ -292,6 +324,7 @@ main(int argc, char **argv)
     bool run_test = false;
     bool reap_sub = true;
     xcb_generic_event_t *event;
+
     xcb_query_tree_cookie_t tree_c;
     static struct option long_options[] =
     {
@@ -379,8 +412,12 @@ main(int argc, char **argv)
     g_unix_signal_add(SIGTERM, exit_on_signal, NULL);
     g_unix_signal_add(SIGHUP, restart_on_signal, NULL);
 
-    struct sigaction sa = { .sa_handler = signal_fatal, .sa_flags = 0 };
+    struct sigaction sa = { .sa_handler = signal_fatal, .sa_flags = SA_RESETHAND };
     sigemptyset(&sa.sa_mask);
+    sigaction(SIGABRT, &sa, 0);
+    sigaction(SIGBUS, &sa, 0);
+    sigaction(SIGFPE, &sa, 0);
+    sigaction(SIGILL, &sa, 0);
     sigaction(SIGSEGV, &sa, 0);
 
     /* do we need to reap all subprocess */
@@ -423,9 +460,6 @@ main(int argc, char **argv)
     if (xcb_cursor_context_new(globalconf.connection, globalconf.screen, &globalconf.cursor_ctx) < 0)
         fatal("Failed to initialize xcb-cursor");
 
-    /* Setup the main context */
-    g_main_context_set_poll_func(g_main_context_default(), &a_glib_poll);
-
     /* initialize dbus */
     a_dbus_init();
 
@@ -438,35 +472,17 @@ main(int argc, char **argv)
     /* Grab server */
     xcb_grab_server(globalconf.connection);
 
-    /* Make sure there are no pending events. Since we didn't really do anything
-     * at all yet, we will just discard all events which we received so far.
-     * The above GrabServer should make sure no new events are generated. */
-    xcb_aux_sync(globalconf.connection);
-    while ((event = xcb_poll_for_event(globalconf.connection)) != NULL)
-    {
-        /* Make sure errors are printed */
-        uint8_t response_type = XCB_EVENT_RESPONSE_TYPE(event);
-        if(response_type == 0)
-            event_handle(event);
-        p_delete(&event);
-    }
-
     {
         const uint32_t select_input_val = XCB_EVENT_MASK_SUBSTRUCTURE_REDIRECT;
+        xcb_void_cookie_t cookie;
 
         /* This causes an error if some other window manager is running */
-        xcb_change_window_attributes(globalconf.connection,
-                                     globalconf.screen->root,
-                                     XCB_CW_EVENT_MASK, &select_input_val);
+        cookie = xcb_change_window_attributes_checked(globalconf.connection,
+                                                      globalconf.screen->root,
+                                                      XCB_CW_EVENT_MASK, &select_input_val);
+        if (xcb_request_check(globalconf.connection, cookie))
+            fatal("another window manager is already running");
     }
-
-    /* Need to xcb_flush to validate error handler */
-    xcb_aux_sync(globalconf.connection);
-
-    /* Process all errors in the queue if any. There can be no events yet, so if
-     * this function returns something, it must be an error. */
-    if (xcb_poll_for_event(globalconf.connection) != NULL)
-        fatal("another window manager is already running");
 
     /* Prefetch the maximum request length */
     xcb_prefetch_maximum_request_length(globalconf.connection);
@@ -547,6 +563,10 @@ main(int argc, char **argv)
     scan(tree_c);
 
     xcb_flush(globalconf.connection);
+
+    /* Setup the main context */
+    g_main_context_set_poll_func(g_main_context_default(), &a_glib_poll);
+    gettimeofday(&last_wakeup, NULL);
 
     /* main event loop */
     globalconf.loop = g_main_loop_new(NULL, FALSE);

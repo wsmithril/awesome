@@ -20,8 +20,8 @@
  */
 
 #include "config.h"
-
 #include "dbus.h"
+
 #include <glib.h>
 
 #ifdef WITH_DBUS
@@ -797,6 +797,8 @@ const struct luaL_Reg awesome_dbus_lib[] =
     { "remove_match", luaA_dbus_remove_match },
     { "connect_signal", luaA_dbus_connect_signal },
     { "disconnect_signal", luaA_dbus_disconnect_signal },
+    { "__index", luaA_default_index },
+    { "__newindex", luaA_default_newindex },
     { NULL, NULL }
 };
 

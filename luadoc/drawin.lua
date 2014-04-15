@@ -4,18 +4,19 @@
 module("drawin")
 
 --- Drawin object.
--- @field screen Screen number.
 -- @field border_width Border width.
 -- @field border_color Border color.
 -- @field ontop On top of other windows.
 -- @field cursor The mouse cursor.
 -- @field visible Visibility.
 -- @field opacity The opacity of the drawin, between 0 and 1.
+-- @field type The window type (desktop, normal, dock, …).
 -- @field x The x coordinates.
 -- @field y The y coordinates.
 -- @field width The width of the drawin.
 -- @field height The height of the drawin.
 -- @field drawable The drawin's drawable.
+-- @field window The X window id.
 -- @field shape_bounding The drawin's bounding shape as a (native) cairo surface.
 -- @field shape_clip The drawin's clip shape as a (native) cairo surface.
 -- @class table
@@ -37,6 +38,17 @@ module("drawin")
 -- @param A table with coordinates to modify.
 -- @return A table with drawin coordinates and geometry.
 -- @name geometry
+-- @class function
+
+--- Change a xproperty.
+-- @param name The name of the X11 property
+-- @param value The new value for the property
+-- @name set_xproperty
+-- @class function
+
+--- Get the value of a xproperty.
+-- @param name The name of the X11 property
+-- @name get_xproperty
 -- @class function
 
 --- Add a signal.

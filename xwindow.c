@@ -19,14 +19,13 @@
  *
  */
 
+#include "xwindow.h"
+#include "common/atoms.h"
+#include "objects/button.h"
+
 #include <xcb/xcb.h>
-#include <xcb/xcb_atom.h>
 #include <xcb/shape.h>
 #include <cairo-xcb.h>
-
-#include "xwindow.h"
-#include "objects/button.h"
-#include "common/atoms.h"
 
 /** Mask shorthands */
 #define BUTTONMASK     (XCB_EVENT_MASK_BUTTON_PRESS | XCB_EVENT_MASK_BUTTON_RELEASE)
@@ -329,6 +328,9 @@ xwindow_shape_pixmap(int width, int height, cairo_surface_t *surf)
     xcb_pixmap_t pixmap = xcb_generate_id(globalconf.connection);
     cairo_surface_t *dest;
     cairo_t *cr;
+
+    if (width <= 0 || height <= 0)
+        return XCB_NONE;
 
     xcb_create_pixmap(globalconf.connection, 1, pixmap, globalconf.screen->root, width, height);
     dest = cairo_xcb_surface_create_for_bitmap(globalconf.connection, globalconf.screen, pixmap, width, height);

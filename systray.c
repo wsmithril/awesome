@@ -19,18 +19,15 @@
  *
  */
 
+#include "systray.h"
+#include "common/atoms.h"
+#include "objects/drawin.h"
+#include "xwindow.h"
+#include "globalconf.h"
+
 #include <xcb/xcb.h>
 #include <xcb/xcb_icccm.h>
 #include <xcb/xcb_atom.h>
-
-#include "luaa.h"
-#include "screen.h"
-#include "systray.h"
-#include "xwindow.h"
-#include "common/array.h"
-#include "common/atoms.h"
-#include "common/xutil.h"
-#include "objects/drawin.h"
 
 #define SYSTEM_TRAY_REQUEST_DOCK 0 /* Begin icon docking */
 
@@ -164,7 +161,6 @@ systray_request_handle(xcb_window_t embed_win, xembed_info_t *info)
 
     xcb_change_window_attributes(globalconf.connection, embed_win, XCB_CW_EVENT_MASK,
                                  select_input_val);
-    xwindow_set_state(embed_win, XCB_ICCCM_WM_STATE_WITHDRAWN);
 
     /* we grab the window, but also make sure it's automatically reparented back
      * to the root window if we should die.
@@ -272,7 +268,7 @@ luaA_systray_invalidate(void)
 }
 
 static void
-systray_update(int base_size, bool horizontal)
+systray_update(int base_size, bool horizontal, bool reverse)
 {
     if(base_size <= 0)
         return;
@@ -293,7 +289,13 @@ systray_update(int base_size, bool horizontal)
     config_vals[2] = config_vals[3] = base_size;
     for(int i = 0; i < globalconf.embedded.len; i++)
     {
-        xembed_window_t *em = &globalconf.embedded.tab[i];
+        xembed_window_t *em;
+
+        if(reverse)
+            em = &globalconf.embedded.tab[(globalconf.embedded.len - i - 1)];
+        else
+            em = &globalconf.embedded.tab[i];
+
         xcb_configure_window(globalconf.connection, em->win,
                              XCB_CONFIG_WINDOW_X | XCB_CONFIG_WINDOW_Y | XCB_CONFIG_WINDOW_WIDTH | XCB_CONFIG_WINDOW_HEIGHT,
                              config_vals);
@@ -314,6 +316,8 @@ systray_update(int base_size, bool horizontal)
  * \lparam y Y position for the systray.
  * \lparam base_size The size (width and height) each systray item gets.
  * \lparam horiz If true, the systray is horizontal, else vertical
+ * \lparam bg Color of the systray background
+ * \lparam revers If true, the systray icon order will be reversed, else default
  */
 int
 luaA_systray(lua_State *L)
@@ -327,6 +331,7 @@ luaA_systray(lua_State *L)
         int base_size = luaL_checknumber(L, 4);
         bool horiz = lua_toboolean(L, 5);
         const char *bg = luaL_checklstring(L, 6, &bg_len);
+        bool revers = lua_toboolean(L, 7);
         color_t bg_color;
 
         if(color_init_reply(color_init_unchecked(&bg_color, bg, bg_len)))
@@ -358,7 +363,7 @@ luaA_systray(lua_State *L)
 
         if(globalconf.embedded.len != 0)
         {
-            systray_update(base_size, horiz);
+            systray_update(base_size, horiz, revers);
             xcb_map_window(globalconf.connection,
                            globalconf.systray.window);
         }

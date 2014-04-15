@@ -20,12 +20,11 @@
  */
 
 #include "mouse.h"
-#include "screen.h"
-#include "objects/client.h"
+#include "common/util.h"
 #include "globalconf.h"
+#include "objects/client.h"
 #include "objects/drawin.h"
-#include "luaa.h"
-#include "common/xutil.h"
+#include "objects/screen.h"
 
 /** Get the pointer position.
  * \param window The window to get position on.
@@ -106,13 +105,22 @@ luaA_mouse_index(lua_State *L)
 
     /* attr is not "screen"?! */
     if (A_STRNEQ(attr, "screen"))
-        return 0;
+        return luaA_default_index(L);
 
     if (!mouse_query_pointer_root(&mouse_x, &mouse_y, NULL, NULL))
-        return 0;
+    {
+        /* Nothing ever handles mouse.screen being nil. Lying is better than
+         * having lots of lua errors in this case.
+         */
+        if (globalconf.focus.client)
+            lua_pushnumber(L, screen_get_index(globalconf.focus.client->screen));
+        else
+            lua_pushnumber(L, 1);
+        return 1;
+    }
 
     screen = screen_getbycoord(mouse_x, mouse_y);
-    lua_pushnumber(L, screen_array_indexof(&globalconf.screens, screen) + 1);
+    lua_pushnumber(L, screen_get_index(screen));
     return 1;
 }
 
@@ -124,19 +132,13 @@ static int
 luaA_mouse_newindex(lua_State *L)
 {
     const char *attr = luaL_checkstring(L, 2);
-    int x, y = 0;
-    int screen;
+    screen_t *screen;
 
     if (A_STRNEQ(attr, "screen"))
-        return 0;
+        return luaA_default_newindex(L);
 
-    screen = luaL_checknumber(L, 3) - 1;
-    luaA_checkscreen(screen);
-
-    x = globalconf.screens.tab[screen].geometry.x;
-    y = globalconf.screens.tab[screen].geometry.y;
-
-    mouse_warp_pointer(globalconf.screen->root, x, y);
+    screen = luaA_checkscreen(L, 3);
+    mouse_warp_pointer(globalconf.screen->root, screen->geometry.x, screen->geometry.y);
     return 0;
 }
 

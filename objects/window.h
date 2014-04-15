@@ -22,9 +22,10 @@
 #ifndef AWESOME_OBJECTS_WINDOW_H
 #define AWESOME_OBJECTS_WINDOW_H
 
-#include "strut.h"
-#include "objects/button.h"
+#include "color.h"
 #include "common/luaclass.h"
+#include "objects/button.h"
+#include "strut.h"
 
 /** Windows type */
 typedef enum
@@ -82,7 +83,9 @@ void window_set_opacity(lua_State *, int, double);
 void window_set_border_width(lua_State *, int, int);
 int luaA_window_get_type(lua_State *, window_t *);
 int luaA_window_set_type(lua_State *, window_t *);
-uint32_t window_translate_type(window_type_t type);
+uint32_t window_translate_type(window_type_t);
+int window_set_xproperty(lua_State *, xcb_window_t, int, int);
+int window_get_xproperty(lua_State *, xcb_window_t, int);
 
 #endif
 // vim: filetype=c:expandtab:shiftwidth=4:tabstop=8:softtabstop=4:textwidth=80

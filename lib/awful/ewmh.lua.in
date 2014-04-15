@@ -9,9 +9,11 @@ local client = client
 local screen = screen
 local ipairs = ipairs
 local math = math
+local atag = require("awful.tag")
 
 --- Implements EWMH requests handling.
 -- awful.ewmh
+local ewmh = {}
 
 local data = setmetatable({}, { __mode = 'k' })
 
@@ -121,7 +123,7 @@ local function border_change(window)
         window:geometry { height = g.height - 2*bw, y = g.y }
     end
     if window.maximized_horizontal then
-        window:geometry { height = g.height - 2*bw, y = g.y }
+        window:geometry { width = g.width - 2*bw, x = g.x }
     end
     if window.fullscreen then
         -- This *will* cause an endless loop if some other property::border_width
@@ -131,10 +133,34 @@ local function border_change(window)
     end
 end
 
+-- Activate a window
+function ewmh.activate(c)
+    if c:isvisible() then
+        client.focus = c
+        c:raise()
+    elseif not awesome.startup then
+        c.urgent = true
+    end
+end
+
+-- Tag a window with its requested tag
+function ewmh.tag(c, t)
+    if not t then
+        c.sticky = true
+    else
+        c.screen = atag.getscreen(t)
+        c:tags({ t })
+    end
+end
+
+client.connect_signal("request::activate", ewmh.activate)
+client.connect_signal("request::tag", ewmh.tag)
 client.connect_signal("request::maximized_horizontal", maximized_horizontal)
 client.connect_signal("request::maximized_vertical", maximized_vertical)
 client.connect_signal("request::fullscreen", fullscreen)
 client.connect_signal("property::screen", screen_change)
 client.connect_signal("property::border_width", border_change)
+
+return ewmh
 
 -- vim: filetype=lua:expandtab:shiftwidth=4:tabstop=8:softtabstop=4:textwidth=80

@@ -19,15 +19,15 @@
  * 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
  */
 
+#include "config.h"
+#include "common/version.h"
+#include "awesome-version-internal.h"
+
 #include <stdlib.h>
 #include <stdio.h>
 
 #include <lualib.h>
 #include <lauxlib.h>
-
-#include "config.h"
-#include "common/version.h"
-#include "awesome-version-internal.h"
 
 /** \brief Print version message and quit program.
  * \param executable program name
@@ -64,6 +64,24 @@ eprint_version(void)
     printf("✘\n");
 #endif
     exit(EXIT_SUCCESS);
+}
+
+/** Get version string.
+ * \return A string describing the current version.
+ */
+const char *
+awesome_version_string(void)
+{
+    return AWESOME_VERSION;
+}
+
+/** Get release string.
+ * \return A string describing the code name of the relase.
+ */
+const char *
+awesome_release_string(void)
+{
+    return AWESOME_RELEASE;
 }
 
 // vim: filetype=c:expandtab:shiftwidth=4:tabstop=8:softtabstop=4:textwidth=80

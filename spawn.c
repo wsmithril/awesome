@@ -19,17 +19,10 @@
  *
  */
 
-#include <unistd.h>
-#include <errno.h>
-#include <sys/types.h>
-#include <sys/wait.h>
-
-#include <glib.h>
-
 #include "spawn.h"
-#include "screen.h"
-#include "luaa.h"
-#include "event.h"
+
+#include <unistd.h>
+#include <glib.h>
 
 /** 20 seconds timeout */
 #define AWESOME_SPAWN_TIMEOUT 20.0
@@ -272,6 +265,7 @@ static gchar **
 parse_command(lua_State *L, int idx)
 {
     gchar **argv = NULL;
+    idx = luaA_absindex(L, idx);
 
     if (lua_isstring(L, idx))
     {
@@ -282,12 +276,24 @@ parse_command(lua_State *L, int idx)
     else if (lua_istable(L, idx))
     {
         size_t i, len = luaA_rawlen(L, idx);
-        argv = g_new0(gchar *, len + 1);
 
+        /* First verify that the table is sane: All integer keys must contain
+         * strings. Do this by pushing them all onto the stack.
+         */
         for (i = 0; i < len; i++)
         {
             lua_rawgeti(L, idx, i+1);
-            argv[i] = g_strdup(lua_tostring(L, -1));
+            if (lua_type(L, -1) != LUA_TSTRING)
+                luaL_error(L, "Non-string argument at table index %d", i+1);
+        }
+
+        /* From this point on nothing can go wrong and so we can safely allocate
+         * memory.
+         */
+        argv = g_new0(gchar *, len + 1);
+        for (i = 0; i < len; i++)
+        {
+            argv[len - i - 1] = g_strdup(lua_tostring(L, -1));
             lua_pop(L, 1);
         }
     }
@@ -321,29 +327,20 @@ luaA_spawn(lua_State *L)
         use_sn = luaA_checkboolean(L, 2);
 
     argv = parse_command(L, 1);
-    if(!argv)
+    if(!argv || !argv[0])
+    {
+        g_strfreev(argv);
         return 0;
+    }
 
     SnLauncherContext *context = NULL;
     if(use_sn)
     {
-        char *cmdname, *space;
-        const char *first_no_space_char = argv[0];
-        /* Look for the first char which is not space */
-        while(*first_no_space_char && *first_no_space_char == ' ')
-            first_no_space_char++;
-        /* Look for space in the string to get the command name. */
-        if((space = strchr(first_no_space_char, ' ')))
-            cmdname = a_strndup(argv[0], space - argv[0]);
-        else
-            cmdname = a_strdup(argv[0]);
-
         context = sn_launcher_context_new(globalconf.sndisplay, globalconf.default_screen);
         sn_launcher_context_set_name(context, "awesome");
         sn_launcher_context_set_description(context, "awesome spawn");
-        sn_launcher_context_set_binary_name(context, cmdname);
-        sn_launcher_context_initiate(context, "awesome", cmdname, globalconf.timestamp);
-        p_delete(&cmdname);
+        sn_launcher_context_set_binary_name(context, argv[0]);
+        sn_launcher_context_initiate(context, "awesome", argv[0], globalconf.timestamp);
 
         /* app will have AWESOME_SPAWN_TIMEOUT seconds to complete,
          * or the timeout function will terminate the launch sequence anyway */
@@ -368,7 +365,11 @@ luaA_spawn(lua_State *L)
     /* push pid on stack */
     lua_pushnumber(L, pid);
 
-    return 1;
+    /* push sn on stack */
+    if (context)
+        lua_pushstring(L,sn_launcher_context_get_startup_id(context));
+
+    return (context)?2:1;
 }
 
 // vim: filetype=c:expandtab:shiftwidth=4:tabstop=8:softtabstop=4:textwidth=80

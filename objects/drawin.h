@@ -24,9 +24,7 @@
 #define AWESOME_OBJECTS_DRAWIN_H
 
 #include "objects/window.h"
-#include "common/luaobject.h"
 #include "objects/drawable.h"
-#include "draw.h"
 
 /** Drawin type */
 struct drawin_t
@@ -38,17 +36,13 @@ struct drawin_t
     bool visible;
     /** Cursor */
     char *cursor;
-    /** The pixmap for double buffering. */
-    xcb_pixmap_t pixmap;
     /** The drawable for this drawin. */
     drawable_t *drawable;
     /** The window geometry. */
     area_t geometry;
 };
 
-void drawin_unref_simplified(drawin_t **);
-
-ARRAY_FUNCS(drawin_t *, drawin, drawin_unref_simplified)
+ARRAY_FUNCS(drawin_t *, drawin, DO_NOTHING)
 
 drawin_t * drawin_getbywin(xcb_window_t);
 

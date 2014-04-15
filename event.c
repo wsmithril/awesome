@@ -19,15 +19,8 @@
  *
  */
 
-#include <xcb/xcb.h>
-#include <xcb/randr.h>
-#include <xcb/shape.h>
-#include <xcb/xcb_atom.h>
-#include <xcb/xcb_icccm.h>
-#include <xcb/xcb_event.h>
-
-#include "awesome.h"
 #include "event.h"
+#include "awesome.h"
 #include "property.h"
 #include "objects/tag.h"
 #include "objects/drawin.h"
@@ -39,9 +32,16 @@
 #include "mousegrabber.h"
 #include "luaa.h"
 #include "systray.h"
-#include "screen.h"
+#include "objects/screen.h"
 #include "common/atoms.h"
 #include "common/xutil.h"
+
+#include <xcb/xcb.h>
+#include <xcb/randr.h>
+#include <xcb/shape.h>
+#include <xcb/xcb_atom.h>
+#include <xcb/xcb_icccm.h>
+#include <xcb/xcb_event.h>
 
 #define DO_EVENT_HOOK_CALLBACK(type, xcbtype, xcbeventprefix, arraytype, match) \
     static void \
@@ -547,7 +547,7 @@ event_handle_expose(xcb_expose_event_t *ev)
                                       ev->x, ev->y,
                                       ev->width, ev->height);
     if ((client = client_getbyframewin(ev->window)))
-        client_refresh(client);
+        client_refresh_partial(client, ev->x, ev->y, ev->width, ev->height);
 }
 
 /** The key press event handler.
@@ -632,7 +632,7 @@ event_handle_maprequest(xcb_map_request_event_t *ev)
             goto bailout;
         }
 
-        client_manage(ev->window, geom_r, false);
+        client_manage(ev->window, geom_r, wa_r);
 
         p_delete(&geom_r);
     }

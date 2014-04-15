@@ -19,18 +19,16 @@
  *
  */
 
-#include <X11/keysym.h>
-#include <X11/XF86keysym.h>
-#include <xcb/xtest.h>
-#include <cairo-xcb.h>
-
 #include "globalconf.h"
-#include "objects/button.h"
-#include "objects/drawin.h"
-#include "luaa.h"
-#include "xwindow.h"
+
+#include "common/atoms.h"
 #include "common/xcursor.h"
-#include "common/xutil.h"
+#include "objects/button.h"
+#include "xwindow.h"
+
+#include <xcb/xtest.h>
+#include <xcb/xcb_aux.h>
+#include <cairo-xcb.h>
 
 static void
 root_set_wallpaper_pixmap(xcb_connection_t *c, xcb_pixmap_t p)
@@ -63,7 +61,7 @@ root_set_wallpaper_pixmap(xcb_connection_t *c, xcb_pixmap_t p)
         if (rootpix)
             xcb_kill_client(c, *rootpix);
     }
-    free(prop_r);
+    p_delete(&prop_r);
 }
 
 static bool
@@ -347,6 +345,8 @@ luaA_root_wallpaper(lua_State *L)
 {
     xcb_get_property_cookie_t prop_c;
     xcb_get_property_reply_t *prop_r;
+    xcb_get_geometry_cookie_t geom_c;
+    xcb_get_geometry_reply_t *geom_r;
     xcb_pixmap_t *rootpix;
     cairo_surface_t *surface;
 
@@ -364,27 +364,37 @@ luaA_root_wallpaper(lua_State *L)
 
     if (!prop_r || !prop_r->value_len)
     {
-        free(prop_r);
+        p_delete(&prop_r);
         return 0;
     }
 
     rootpix = xcb_get_property_value(prop_r);
     if (!rootpix)
     {
-        free(prop_r);
+        p_delete(&prop_r);
         return 0;
     }
 
-    /* We can't query the pixmap's values (or even if that pixmap exists at
-     * all), so let's just assume that it uses the default visual and is as
-     * large as the root window. Everything else wouldn't make sense.
-     */
+    geom_c = xcb_get_geometry_unchecked(globalconf.connection, *rootpix);
+    geom_r = xcb_get_geometry_reply(globalconf.connection, geom_c, NULL);
+    if (!geom_r)
+    {
+        p_delete(&prop_r);
+        return 0;
+    }
+
+    /* Only the default visual makes sense, so just the default depth */
+    if (geom_r->depth != draw_visual_depth(globalconf.screen, globalconf.default_visual->visual_id))
+        warn("Got a pixmap with depth %d, but the default depth is %d, continuing anyway",
+                geom_r->depth, draw_visual_depth(globalconf.screen, globalconf.default_visual->visual_id));
+
     surface = cairo_xcb_surface_create(globalconf.connection, *rootpix, globalconf.default_visual,
-            globalconf.screen->width_in_pixels, globalconf.screen->height_in_pixels);
+                                       geom_r->width, geom_r->height);
 
     /* lua has to make sure this surface gets destroyed */
     lua_pushlightuserdata(L, surface);
-    free(prop_r);
+    p_delete(&prop_r);
+    p_delete(&geom_r);
     return 1;
 }
 
@@ -416,6 +426,8 @@ const struct luaL_Reg awesome_root_lib[] =
     { "drawins", luaA_root_drawins },
     { "wallpaper", luaA_root_wallpaper },
     { "tags", luaA_root_tags },
+    { "__index", luaA_default_index },
+    { "__newindex", luaA_default_newindex },
     { NULL, NULL }
 };
 

@@ -19,17 +19,15 @@
  *
  */
 
-#include <xcb/xcb_atom.h>
-
-#include "screen.h"
 #include "property.h"
-#include "objects/client.h"
-#include "ewmh.h"
-#include "objects/drawin.h"
-#include "xwindow.h"
-#include "luaa.h"
 #include "common/atoms.h"
 #include "common/xutil.h"
+#include "ewmh.h"
+#include "objects/client.h"
+#include "objects/drawin.h"
+#include "xwindow.h"
+
+#include <xcb/xcb_atom.h>
 
 #define HANDLE_TEXT_PROPERTY(funcname, atom, setfunc) \
     xcb_get_property_cookie_t \
@@ -378,12 +376,49 @@ property_handle_xrootpmap_id(uint8_t state,
     return 0;
 }
 
+/** The property notify event handler handling xproperties.
+ * \param ev The event.
+ */
+static void
+property_handle_propertynotify_xproperty(xcb_property_notify_event_t *ev)
+{
+    xproperty_t *prop;
+    xproperty_t lookup = { .atom = ev->atom };
+    buffer_t buf;
+    void *obj;
+
+    prop = xproperty_array_lookup(&globalconf.xproperties, &lookup);
+    if(!prop)
+        /* Property is not registered */
+        return;
+
+    if (ev->window != globalconf.screen->root)
+    {
+        obj = client_getbywin(ev->window);
+        if(!obj)
+            obj = drawin_getbywin(ev->window);
+        if(!obj)
+            return;
+    } else
+        obj = NULL;
+
+    /* Get us the name of the property */
+    buffer_inita(&buf, a_strlen(prop->name) + a_strlen("xproperty::") + 1);
+    buffer_addf(&buf, "xproperty::%s", prop->name);
+
+    /* And emit the right signal */
+    if (obj)
+    {
+        luaA_object_push(globalconf.L, obj);
+        luaA_object_emit_signal(globalconf.L, -1, buf.s, 0);
+        lua_pop(globalconf.L, 1);
+    } else
+        signal_object_emit(globalconf.L, &global_signals, buf.s, 0);
+    buffer_wipe(&buf);
+}
 
 /** The property notify event handler.
- * \param data Unused data.
- * \param connection The connection to the X server.
  * \param ev The event.
- * \return Status code, 0 if everything's fine.
  */
 void
 property_handle_propertynotify(xcb_property_notify_event_t *ev)
@@ -392,6 +427,8 @@ property_handle_propertynotify(xcb_property_notify_event_t *ev)
                    xcb_window_t window) = NULL;
 
     globalconf.timestamp = ev->time;
+
+    property_handle_propertynotify_xproperty(ev);
 
     /* Find the correct event handler */
 #define HANDLE(atom_, cb) \
@@ -434,6 +471,85 @@ property_handle_propertynotify(xcb_property_notify_event_t *ev)
 #undef END
 
     (*handler)(ev->state, ev->window);
+}
+
+/** Register a new xproperty.
+ * \param L The Lua VM state.
+ * \return The number of elements pushed on stack.
+ * \luastack
+ * \lparam The name of the X11 property
+ * \lparam One of "string", "number" or "boolean"
+ */
+int
+luaA_register_xproperty(lua_State *L)
+{
+    const char *name;
+    struct xproperty property;
+    struct xproperty *found;
+    const char *const args[] = { "string", "number", "boolean" };
+    xcb_intern_atom_reply_t *atom_r;
+    int type;
+
+    name = luaL_checkstring(L, 1);
+    type = luaL_checkoption(L, 2, NULL, args);
+    if (type == 0)
+        property.type = PROP_STRING;
+    else if (type == 1)
+        property.type = PROP_NUMBER;
+    else
+        property.type = PROP_BOOLEAN;
+
+    atom_r = xcb_intern_atom_reply(globalconf.connection,
+                                   xcb_intern_atom_unchecked(globalconf.connection, false,
+                                                             a_strlen(name), name),
+                                   NULL);
+    if(!atom_r)
+        return 0;
+
+    property.atom = atom_r->atom;
+    p_delete(&atom_r);
+
+    found = xproperty_array_lookup(&globalconf.xproperties, &property);
+    if(found)
+    {
+        /* Property already registered */
+        if(found->type != property.type)
+            return luaL_error(L, "xproperty '%s' already registered with different type", name);
+    }
+    else
+    {
+        buffer_t buf;
+        buffer_inita(&buf, a_strlen(name) + a_strlen("xproperty::") + 1);
+        buffer_addf(&buf, "xproperty::%s", name);
+
+        property.name = a_strdup(name);
+        xproperty_array_insert(&globalconf.xproperties, property);
+        signal_add(&window_class.signals, buf.s);
+        signal_add(&global_signals, buf.s);
+        buffer_wipe(&buf);
+    }
+
+    return 0;
+}
+
+/** Set an xproperty.
+ * \param L The Lua VM state.
+ * \return The number of elements pushed on stack.
+ */
+int
+luaA_set_xproperty(lua_State *L)
+{
+    return window_set_xproperty(L, globalconf.screen->root, 1, 2);
+}
+
+/** Get an xproperty.
+ * \param L The Lua VM state.
+ * \return The number of elements pushed on stack.
+ */
+int
+luaA_get_xproperty(lua_State *L)
+{
+    return window_get_xproperty(L, globalconf.screen->root, 1);
 }
 
 // vim: filetype=c:expandtab:shiftwidth=4:tabstop=8:softtabstop=4:textwidth=80

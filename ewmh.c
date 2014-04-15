@@ -19,20 +19,16 @@
  *
  */
 
+#include "ewmh.h"
+#include "objects/client.h"
+#include "objects/tag.h"
+#include "common/atoms.h"
+
 #include <sys/types.h>
 #include <unistd.h>
 
 #include <xcb/xcb.h>
 #include <xcb/xcb_atom.h>
-
-#include "ewmh.h"
-#include "objects/tag.h"
-#include "screen.h"
-#include "objects/client.h"
-#include "luaa.h"
-#include "common/atoms.h"
-#include "common/buffer.h"
-#include "common/xutil.h"
 
 #define _NET_WM_STATE_REMOVE 0
 #define _NET_WM_STATE_ADD 1
@@ -359,13 +355,43 @@ ewmh_process_state_atom(client_t *c, xcb_atom_t state, int set)
     lua_pop(globalconf.L, 1);
 }
 
+static void
+ewmh_process_desktop(client_t *c, uint32_t desktop)
+{
+    int idx = desktop;
+    if(desktop == 0xffffffff)
+    {
+        luaA_object_push(globalconf.L, c);
+        lua_pushnil(globalconf.L);
+        luaA_object_emit_signal(globalconf.L, -2, "request::tag", 1);
+        /* Pop the client, arguments are already popped */
+        lua_pop(globalconf.L, 1);
+    }
+    else if (idx >= 0 && idx < globalconf.tags.len)
+    {
+        luaA_object_push(globalconf.L, c);
+        luaA_object_push(globalconf.L, globalconf.tags.tab[idx]);
+        luaA_object_emit_signal(globalconf.L, -2, "request::tag", 1);
+        /* Pop the client, arguments are already popped */
+        lua_pop(globalconf.L, 1);
+    }
+}
+
 int
 ewmh_process_client_message(xcb_client_message_event_t *ev)
 {
     client_t *c;
 
     if(ev->type == _NET_CURRENT_DESKTOP)
-        tag_view_only_byindex(ev->data.data32[0]);
+    {
+        int idx = ev->data.data32[0];
+        if (idx >= 0 && idx < globalconf.tags.len)
+        {
+            luaA_object_push(globalconf.L, globalconf.tags.tab[idx]);
+            luaA_object_emit_signal(globalconf.L, -1, "request::select", 0);
+            lua_pop(globalconf.L, 1);
+        }
+    }
     else if(ev->type == _NET_CLOSE_WINDOW)
     {
         if((c = client_getbywin(ev->window)))
@@ -375,17 +401,7 @@ ewmh_process_client_message(xcb_client_message_event_t *ev)
     {
         if((c = client_getbywin(ev->window)))
         {
-            if(ev->data.data32[0] == 0xffffffff)
-                c->sticky = true;
-            else
-                for(int i = 0; i < globalconf.tags.len; i++)
-                    if((int)ev->data.data32[0] == i)
-                    {
-                        luaA_object_push(globalconf.L, globalconf.tags.tab[i]);
-                        tag_client(c);
-                    }
-                    else
-                        untag_client(c, globalconf.tags.tab[i]);
+            ewmh_process_desktop(c, ev->data.data32[0]);
         }
     }
     else if(ev->type == _NET_WM_STATE)
@@ -401,8 +417,9 @@ ewmh_process_client_message(xcb_client_message_event_t *ev)
     else if(ev->type == _NET_ACTIVE_WINDOW)
     {
         if((c = client_getbywin(ev->window))) {
-            client_focus(c);
-            client_raise(c);
+            luaA_object_push(globalconf.L, c);
+            luaA_object_emit_signal(globalconf.L, -1, "request::activate", 0);
+            lua_pop(globalconf.L, 1);
         }
     }
 
@@ -476,7 +493,6 @@ ewmh_client_check_hints(client_t *c)
 {
     xcb_atom_t *state;
     void *data = NULL;
-    int desktop;
     xcb_get_property_cookie_t c0, c1, c2;
     xcb_get_property_reply_t *reply;
 
@@ -493,25 +509,7 @@ ewmh_client_check_hints(client_t *c)
     reply = xcb_get_property_reply(globalconf.connection, c0, NULL);
     if(reply && reply->value_len && (data = xcb_get_property_value(reply)))
     {
-        desktop = *(uint32_t *) data;
-        if(desktop == -1)
-            c->sticky = true;
-        else if (desktop >= 0 && desktop < globalconf.tags.len)
-            for(int i = 0; i < globalconf.tags.len; i++)
-                if(desktop == i)
-                {
-                    luaA_object_push(globalconf.L, globalconf.tags.tab[i]);
-                    tag_client(c);
-                }
-                else
-                    untag_client(c, globalconf.tags.tab[i]);
-        else
-            /* Value out of bounds, just give it the first tag */
-            if (globalconf.tags.len > 0)
-            {
-                luaA_object_push(globalconf.L, globalconf.tags.tab[0]);
-                tag_client(c);
-            }
+        ewmh_process_desktop(c, *(uint32_t *) data);
     }
 
     p_delete(&reply);
