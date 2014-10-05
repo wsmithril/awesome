@@ -325,6 +325,7 @@ main(int argc, char **argv)
     bool no_argb = false;
     bool run_test = false;
     bool reap_sub = true;
+
     xcb_query_tree_cookie_t tree_c;
     static struct option long_options[] =
     {
