@@ -244,6 +244,7 @@ luaA_class_setup(lua_State *L, lua_class_t *class,
     class->newindex_miss_property = newindex_miss_property;
     class->checker = checker;
     class->parent = parent;
+    class->tostring = NULL;
     class->instances = 0;
 
     signal_add(&class->signals, "new");
@@ -367,6 +368,19 @@ luaA_class_index(lua_State *L)
         return 1;
 
     lua_class_t *class = luaA_class_get(L, 1);
+
+    /* Is this the special 'valid' property? This is the only property
+     * accessible for invalid objects and thus needs special handling. */
+    const char *attr = luaL_checkstring(L, 2);
+    if (A_STREQ(attr, "valid"))
+    {
+        void *p = luaA_toudata(L, 1, class);
+        if (class->checker)
+            lua_pushboolean(L, p != NULL && class->checker(p));
+        else
+            lua_pushboolean(L, p != NULL);
+        return 1;
+    }
 
     lua_class_property_t *prop = luaA_class_property_get(L, class, 2);
 

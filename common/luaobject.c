@@ -253,9 +253,14 @@ luaA_object_emit_signal(lua_State *L, int oud,
                         const char *name, int nargs)
 {
     int oud_abs = luaA_absindex(L, oud);
-    lua_object_t *obj = lua_touserdata(L, oud);
+    lua_class_t *lua_class = luaA_class_get(L, oud);
+    lua_object_t *obj = luaA_toudata(L, oud, lua_class);
     if(!obj) {
         warn("Trying to emit signal '%s' on non-object", name);
+        return;
+    }
+    else if(lua_class->checker && !lua_class->checker(obj)) {
+        warn("Trying to emit signal '%s' on invalid object", name);
         return;
     }
     signal_t *sigfound = signal_array_getbyid(&obj->signals,
@@ -317,22 +322,34 @@ luaA_object_tostring(lua_State *L)
 {
     lua_class_t *lua_class = luaA_class_get(L, 1);
     lua_object_t *object = luaA_checkudata(L, 1, lua_class);
+    int offset = 0;
 
-    int i = 0;
-    for(; lua_class; lua_class = lua_class->parent, i++)
+    for(; lua_class; lua_class = lua_class->parent)
     {
-        if(i)
+        if(offset)
         {
             lua_pushliteral(L, "/");
-            lua_insert(L, - (i * 2));
+            lua_insert(L, -++offset);
         }
         lua_pushstring(L, NONULL(lua_class->name));
-        lua_insert(L, - (i * 2) - 1);
+        lua_insert(L, -++offset);
+
+        if (lua_class->tostring) {
+            int k, n;
+
+            lua_pushliteral(L, "(");
+            n = 2 + lua_class->tostring(L, object);
+            lua_pushliteral(L, ")");
+
+            for (k = 0; k < n; k++)
+                lua_insert(L, -offset);
+            offset += n;
+        }
     }
 
     lua_pushfstring(L, ": %p", object);
 
-    lua_concat(L, i * 2);
+    lua_concat(L, offset + 1);
 
     return 1;
 }

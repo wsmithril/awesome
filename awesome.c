@@ -90,15 +90,23 @@ static float main_loop_iteration_limit = 0.1;
 void
 awesome_atexit(bool restart)
 {
-    lua_pushboolean(globalconf.L, restart);
-    signal_object_emit(globalconf.L, &global_signals, "exit", 1);
+    lua_State *L = globalconf_get_lua_State();
+    lua_pushboolean(L, restart);
+    signal_object_emit(L, &global_signals, "exit", 1);
+
+    /* Move clients where we want them to be */
+    foreach(c, globalconf.clients)
+    {
+        xcb_reparent_window(globalconf.connection, (*c)->window, globalconf.screen->root,
+                (*c)->geometry.x, (*c)->geometry.y);
+    }
 
     a_dbus_cleanup();
 
     systray_cleanup();
 
     /* Close Lua */
-    lua_close(globalconf.L);
+    lua_close(L);
 
     /* X11 is a great protocol. There is a save-set so that reparenting WMs
      * don't kill clients when they shut down. However, when a focused windows
@@ -462,6 +470,9 @@ main(int argc, char **argv)
     if (xcb_cursor_context_new(globalconf.connection, globalconf.screen, &globalconf.cursor_ctx) < 0)
         fatal("Failed to initialize xcb-cursor");
 
+    /* Did we get some usable data from the above X11 setup? */
+    draw_test_cairo_xcb();
+
     /* initialize dbus */
     a_dbus_init();
 
@@ -564,7 +575,7 @@ main(int argc, char **argv)
     /* scan existing windows */
     scan(tree_c);
 
-    xcb_flush(globalconf.connection);
+    luaA_emit_startup();
 
     /* Setup the main context */
     g_main_context_set_poll_func(g_main_context_default(), &a_glib_poll);

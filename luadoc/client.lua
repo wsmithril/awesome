@@ -47,6 +47,7 @@ module("client")
 -- @field shape_client_bounding The client's bounding shape as set by the program as a (native) cairo surface.
 -- @field shape_client_clip The client's clip shape as set by the program as a (native) cairo surface.
 -- @field startup_id The FreeDesktop StartId.
+-- @field valid If the client that this object refers to is still managed by awesome.
 -- @class table
 -- @name client
 
@@ -65,6 +66,14 @@ module("client")
 -- @param arg1 A table with new coordinates, or none.
 -- @return A table with client coordinates.
 -- @name geometry
+-- @class function
+
+--- Apply size hints to a size.
+-- @param width Desired width of client
+-- @param height Desired height of client
+-- @return Actual width of client
+-- @return Actual height of client
+-- @name apply_size_hints
 -- @class function
 
 --- Return client struts (reserved space at the edge of the screen).
@@ -96,7 +105,7 @@ module("client")
 -- @class function
 
 --- Swap a client with another one in global client list.
--- @param c A client to swap with.
+-- @client A client to swap with.
 -- @name swap
 -- @class function
 

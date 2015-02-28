@@ -101,6 +101,8 @@ struct client_t
     key_array_t keys;
     /** Icon */
     cairo_surface_t *icon;
+    /** True if we ever got an icon from _NET_WM_ICON */
+    bool have_ewmh_icon;
     /** Size hints */
     xcb_size_hints_t size_hints;
     /** The visualtype that c->window uses */
@@ -164,10 +166,11 @@ void client_set_transient_for(lua_State *L, int, client_t *);
 void client_set_name(lua_State *L, int, char *);
 void client_set_alt_name(lua_State *L, int, char *);
 void client_set_group_window(lua_State *, int, xcb_window_t);
-void client_set_icon(client_t *c, cairo_surface_t *s);
+void client_set_icon(client_t *, cairo_surface_t *);
+void client_set_icon_from_pixmaps(client_t *, xcb_pixmap_t, xcb_pixmap_t);
 void client_set_skip_taskbar(lua_State *, int, bool);
 void client_focus(client_t *);
-void client_focus_update(client_t *);
+bool client_focus_update(client_t *);
 bool client_hasproto(client_t *, xcb_atom_t);
 void client_ignore_enterleave_events(void);
 void client_restore_enterleave_events(void);
@@ -219,7 +222,7 @@ client_isfixed(client_t *c)
             && c->size_hints_honor);
 }
 
-/** Returns true if a client is tagged with one of the tags of the 
+/** Returns true if a client is tagged with one of the tags of the
  * specified screen and is not hidden. Note that "banned" clients are included.
  * \param c The client to check.
  * \param screen Virtual screen number.

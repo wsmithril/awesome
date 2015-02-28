@@ -21,6 +21,7 @@
 
 #include "config.h"
 #include "draw.h"
+#include "globalconf.h"
 
 #include <langinfo.h>
 #include <iconv.h>
@@ -95,7 +96,6 @@ free_data(void *data)
 }
 
 /** Create a surface object from this image data.
- * \param L The lua stack.
  * \param width The width of the image.
  * \param height The height of the image
  * \param data The image's data in ARGB format, will be copied by this function.
@@ -188,6 +188,18 @@ draw_surface_from_pixbuf(GdkPixbuf *buf)
     return surface;
 }
 
+static void
+get_surface_size(cairo_surface_t *surface, int *width, int *height)
+{
+    double x1, y1, x2, y2;
+    cairo_t *cr = cairo_create(surface);
+
+    cairo_clip_extents(cr, &x1, &y1, &x2, &y2);
+    cairo_destroy(cr);
+    *width = x2 - x1;
+    *height = y2 - y1;
+}
+
 /** Duplicate the specified image surface.
  * \param surface The surface to copy
  * \return A pointer to a new cairo image surface.
@@ -195,10 +207,15 @@ draw_surface_from_pixbuf(GdkPixbuf *buf)
 cairo_surface_t *
 draw_dup_image_surface(cairo_surface_t *surface)
 {
-    cairo_surface_t *res = cairo_image_surface_create(
-            cairo_image_surface_get_format(surface),
-            cairo_image_surface_get_width(surface),
-            cairo_image_surface_get_height(surface));
+    cairo_surface_t *res;
+    int width, height;
+
+    get_surface_size(surface, &width, &height);
+#if CAIRO_VERSION_MAJOR == 1 && CAIRO_VERSION_MINOR > 12
+    res = cairo_surface_create_similar_image(surface, CAIRO_FORMAT_ARGB32, width, height);
+#else
+    res = cairo_image_surface_create(CAIRO_FORMAT_ARGB32, width, height);
+#endif
 
     cairo_t *cr = cairo_create(res);
     cairo_set_source_surface(cr, surface, 0, 0);
@@ -280,6 +297,21 @@ uint8_t draw_visual_depth(const xcb_screen_t *s, xcb_visualid_t vis)
                     return depth_iter.data->depth;
 
     fatal("Could not find a visual's depth");
+}
+
+void draw_test_cairo_xcb(void)
+{
+    xcb_pixmap_t pixmap = xcb_generate_id(globalconf.connection);
+    xcb_create_pixmap(globalconf.connection, globalconf.default_depth, pixmap,
+                      globalconf.screen->root, 1, 1);
+    cairo_surface_t *surface = cairo_xcb_surface_create(globalconf.connection,
+                                          pixmap, globalconf.visual, 1, 1);
+    if(cairo_surface_status(surface) != CAIRO_STATUS_SUCCESS)
+        fatal("Could not set up display: got cairo surface with status %s",
+                cairo_status_to_string(cairo_surface_status(surface)));
+    cairo_surface_finish(surface);
+    cairo_surface_destroy(surface);
+    xcb_free_pixmap(globalconf.connection, pixmap);
 }
 
 // vim: filetype=c:expandtab:shiftwidth=4:tabstop=8:softtabstop=4:textwidth=80
